@@ -10,6 +10,46 @@ A tiny glowing button in the Windows notification area that shows at a glance wh
 - **Green**: a Linux distribution is running. The tooltip shows which one and how much RAM the VM is using.
 - **Amber**: WSL is starting or stopping, or no distro is running but the VM is still in memory. The VM shuts down by itself after `vmIdleTimeout`.
 
+## What is WSL?
+
+**WSL (Windows Subsystem for Linux)** is a Microsoft component of Windows. It runs real Linux distributions such as Ubuntu, Debian, Fedora or openSUSE directly on Windows, with no dual boot and no separate virtual machine manager like VirtualBox or VMware. You get a Linux shell, Linux command-line tools and package managers (`apt`, `dnf`, …) and you can run Linux programs alongside your Windows apps. Your Windows files are available under `/mnt/c`. Developers use it heavily for web development, Docker, Python, data science and anything that is easier on Linux.
+
+There are two flavours:
+
+| | WSL 1 | WSL 2 (default today) |
+|---|---|---|
+| How it works | Translates Linux system calls into Windows ones | Runs a **real Linux kernel** in a lightweight virtual machine |
+| Compatibility | Good, not complete | Full (Docker, systemd, …) |
+| Memory | No VM | The VM reserves RAM while it runs. It appears as **`vmmemWSL`** in Task Manager |
+
+**WSL Tray is designed for WSL 2.** With WSL 2, the VM can use up to **50% of your physical RAM** by default (for example 8 GB on a 16 GB laptop). Once Linux has grabbed memory, for example for its file cache, it often doesn't give it back to Windows until WSL is shut down. That's why it helps to see at a glance whether WSL is on, and to switch it off when you're not using it.
+
+### Which machines have it?
+
+WSL is **built into Windows, but not enabled out of the box**. It is available on:
+
+- **Windows 11**: every edition, Home included.
+- **Windows 10**: version 1903 (build 18362.1049) or later for WSL 2. The one-command install (`wsl --install`) needs version 2004 (build 19041) or later.
+- **Windows Server 2022** and later. Windows Server 2019 only supports WSL 1.
+- Both **x64** (Intel/AMD) and **ARM64** PCs, such as Snapdragon-based laptops.
+
+WSL 2 also needs **hardware virtualization** (Intel VT-x or AMD-V) enabled in the BIOS/UEFI. It is on by default on most modern PCs. WSL 2 uses Windows' lightweight *Virtual Machine Platform* rather than full Hyper-V, which is why it works on Home editions too. WSL is not available in Windows S mode or on 32-bit Windows. Inside a virtual machine it only works if the host allows nested virtualization.
+
+### Do I have it? How do I install it?
+
+```powershell
+wsl --status        # is WSL installed, and which version is the default?
+wsl -l -v           # installed distributions, their state and WSL version
+```
+
+If WSL isn't installed, open PowerShell **as administrator**, run the command below and restart Windows:
+
+```powershell
+wsl --install       # installs WSL 2 and Ubuntu
+```
+
+See Microsoft's [WSL documentation](https://learn.microsoft.com/windows/wsl/) for more details.
+
 ## Usage
 
 - **Left click**: turns WSL on or off. It **always asks for confirmation** first, and the default button is *No*.
@@ -68,7 +108,7 @@ sparseVhd=true
 
 ## Requirements
 
-- Windows 10/11 with WSL 2
+- Windows 10/11 with WSL 2 installed (see [Which machines have it?](#which-machines-have-it))
 - .NET Framework 4.x (already included in Windows)
 
 ## License
