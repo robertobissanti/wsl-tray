@@ -32,6 +32,12 @@ The interface follows the Windows display language: **English** (default), Itali
 
 To add a translation, copy the English block in [`src/Strings.cs`](src/Strings.cs), translate it and send a pull request.
 
+## Download
+
+Grab `WslTray.exe` (or the zip) from the [latest release](https://github.com/robertobissanti/wsl-tray/releases/latest) and run it. Nothing needs installing.
+
+The executable isn't code-signed, so Windows SmartScreen may show *"Windows protected your PC"* the first time you run it. Click **More info → Run anyway**. If you'd rather not, build it from source yourself (see below). Each release lists the SHA-256 checksums of its files.
+
 ## Build
 
 There is nothing to install. The build uses the C# compiler that ships with Windows (.NET Framework 4.x).
