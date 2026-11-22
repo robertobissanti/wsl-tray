@@ -1,4 +1,8 @@
-# WSL Tray
+<p align="center">
+  <img src="docs/penguin-on.png" width="128" alt="WSL Tray icon: green button with Tux">
+</p>
+
+<h1 align="center">WSL Tray</h1>
 
 A tiny glowing button in the Windows notification area that shows at a glance whether **WSL** is running, and turns it on or off with one click. Linux only uses RAM while you actually need it.
 
