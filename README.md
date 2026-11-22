@@ -1,43 +1,53 @@
 # WSL Tray
 
-Un pulsante luminoso nell'area di notifica di Windows per vedere a colpo d'occhio se **WSL** è acceso e per accenderlo o spegnerlo con un clic. Così Linux non tiene occupata la RAM quando non serve.
+A tiny glowing button in the Windows notification area that shows at a glance whether **WSL** is running, and turns it on or off with one click. Linux only uses RAM while you actually need it.
 
-| Spento | Acceso | In spegnimento |
+| Off | On | Shutting down |
 |:---:|:---:|:---:|
 | <img src="docs/terminal-off.png" width="64"> | <img src="docs/terminal-on.png" width="64"> | <img src="docs/terminal-standby.png" width="64"> |
 
-Lo stile dell'icona si sceglie da tasto destro → **Stile icona**, e la scelta viene ricordata. Gli stili sono quattro: terminale `>_` (predefinito), pinguino Tux, pulsante di accensione e terminale scuro con LED.
+- **Red**: WSL is off and uses no RAM.
+- **Green**: a Linux distribution is running. The tooltip shows which one and how much RAM the VM is using.
+- **Amber**: WSL is starting or stopping, or no distro is running but the VM is still in memory. The VM shuts down by itself after `vmIdleTimeout`.
 
-![confronto stili](docs/confronto-stili.png)
+## Usage
 
-- **Rosso**: WSL è spento e non usa RAM.
-- **Verde**: una distribuzione Linux è in esecuzione. Il tooltip mostra quale e quanta RAM usa la VM.
-- **Ambra**: è in corso un'accensione o uno spegnimento, oppure nessuna distro è attiva ma la VM è ancora in memoria (si spegne da sola dopo `vmIdleTimeout`).
+- **Left click**: turns WSL on or off. It **always asks for confirmation** first, and the default button is *No*.
+- **Right click**: a menu with the status, Turn on, Turn off, Open Linux terminal, Icon style, Start with Windows and Exit.
+- **Exit** only closes the icon. WSL stays as it is.
 
-## Uso
+To turn WSL on, WSL Tray starts a hidden `sleep infinity` process in the default distribution so the distro stays up. To turn it off, it runs `wsl --shutdown`, which stops every distribution and the VM and gives the RAM back to Windows.
 
-- **Clic sinistro**: accende o spegne WSL. Chiede **sempre conferma** prima di farlo.
-- **Clic destro**: menu con stato, Accendi, Spegni, Apri terminale Linux, Stile icona, Avvia con Windows ed Esci.
-- **Esci** chiude solo l'icona e lascia WSL nello stato in cui si trova.
+The status refreshes every 3 seconds using `wsl -l --running -q` and by checking for the `vmmemWSL` process.
 
-Per l'accensione, WSL Tray avvia nella distribuzione predefinita un processo `sleep infinity` nascosto, così la distro resta accesa. Per lo spegnimento esegue `wsl --shutdown`, che chiude tutte le distribuzioni e la VM e restituisce la RAM a Windows.
+### Icon styles
 
-Lo stato si aggiorna ogni 3 secondi con `wsl -l --running -q` e controllando il processo `vmmemWSL`.
+You can pick the icon style from the right-click menu → **Icon style**. Your choice is remembered in `HKCU\Software\WslTray`.
 
-## Compilazione
+![icon styles](docs/icon-styles.png)
 
-Non serve installare nulla: usa il compilatore C# incluso in Windows (.NET Framework 4.x).
+### Languages
+
+The interface follows the Windows display language: **English** (default), Italian, Spanish, French, German and Portuguese. Any other language falls back to English. To force a language, use `WslTray.exe --lang it`.
+
+To add a translation, copy the English block in [`src/Strings.cs`](src/Strings.cs), translate it and send a pull request.
+
+## Build
+
+There is nothing to install. The build uses the C# compiler that ships with Windows (.NET Framework 4.x).
 
 ```powershell
-.\build.ps1          # crea bin\WslTray.exe
+.\build.ps1          # creates bin\WslTray.exe
 .\bin\WslTray.exe
 ```
 
-Per farlo partire all'accesso usa la voce **Avvia con Windows** nel menu. La voce scrive in `HKCU\...\Run` e non servono privilegi di amministratore.
+To start it at sign-in, tick **Start with Windows** in the menu. The setting is written to `HKCU\...\Run`, so no admin rights are needed.
 
-## Suggerimento: limita la RAM di WSL
+`WslTray.exe --render <folder>` saves the icons as PNG files and builds the comparison sheet shown above.
 
-Senza configurazione, WSL 2 può usare fino al 50% della RAM. Un esempio di `%USERPROFILE%\.wslconfig`:
+## Tip: cap WSL's memory
+
+With no configuration, WSL 2 can use up to 50% of your RAM. Here is an example `%USERPROFILE%\.wslconfig`:
 
 ```ini
 [wsl2]
@@ -50,11 +60,11 @@ autoMemoryReclaim=gradual
 sparseVhd=true
 ```
 
-## Requisiti
+## Requirements
 
-- Windows 10/11 con WSL 2
-- .NET Framework 4.x, già presente in Windows
+- Windows 10/11 with WSL 2
+- .NET Framework 4.x (already included in Windows)
 
-## Licenza
+## License
 
 [BSD 3-Clause](LICENSE) © 2026 Roberto Bissanti

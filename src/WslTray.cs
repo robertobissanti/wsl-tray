@@ -1,10 +1,12 @@
-// WSL Tray - pulsante luminoso nell'area di notifica per accendere/spegnere WSL
-// Verde = acceso, Ambra = in avvio/spegnimento o VM ancora in memoria, Rosso = spento
-// Clic sinistro: accende/spegne (con conferma). Clic destro: menu.
+// WSL Tray - glowing button in the Windows notification area to turn WSL on/off
+// Green = on, Amber = starting/stopping or VM still in memory, Red = off
+// Left click: toggle (asks for confirmation). Right click: menu.
 //
 // Copyright (c) 2026 Roberto Bissanti - BSD 3-Clause License
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -20,7 +22,13 @@ static class Program
     static void Main(string[] args)
     {
         // WslTray.exe --render <cartella> : salva le icone in PNG (anteprima / documentazione)
-        if (args.Length == 2 && args[0] == "--render")
+        // WslTray.exe --lang <it|en|es|fr|de|pt> : forces a language (otherwise: Windows UI language)
+        string lang = null;
+        for (int i = 0; i + 1 < args.Length; i++)
+            if (args[i] == "--lang") lang = args[i + 1];
+        T.Init(lang);
+
+        if (args.Length >= 2 && args[0] == "--render")
         {
             IconPainter.RenderPreviews(args[1]);
             return;
@@ -68,15 +76,15 @@ class TrayContext : ApplicationContext
 
         var menu = new ContextMenuStrip();
         miStatus = new ToolStripMenuItem("WSL: ...") { Enabled = false };
-        miOn = new ToolStripMenuItem("Accendi WSL", null, delegate { TurnOn(); });
-        miOff = new ToolStripMenuItem("Spegni WSL (libera la RAM)", null, delegate { TurnOff(); });
-        miTerminal = new ToolStripMenuItem("Apri terminale Linux", null, delegate { OpenTerminal(); });
-        miStyle = new ToolStripMenuItem("Stile icona");
-        AddStyle("Terminale  >_", IconStyle.Terminal);
-        AddStyle("Pinguino (Tux)", IconStyle.Penguin);
-        AddStyle("Pulsante di accensione", IconStyle.Power);
-        AddStyle("Terminale scuro con LED", IconStyle.TerminalLed);
-        miAutostart = new ToolStripMenuItem("Avvia con Windows", null, delegate { ToggleAutostart(); });
+        miOn = new ToolStripMenuItem(T.S.MenuOn, null, delegate { TurnOn(); });
+        miOff = new ToolStripMenuItem(T.S.MenuOff, null, delegate { TurnOff(); });
+        miTerminal = new ToolStripMenuItem(T.S.MenuTerminal, null, delegate { OpenTerminal(); });
+        miStyle = new ToolStripMenuItem(T.S.MenuStyle);
+        AddStyle(T.S.StyleTerminal, IconStyle.Terminal);
+        AddStyle(T.S.StylePenguin, IconStyle.Penguin);
+        AddStyle(T.S.StylePower, IconStyle.Power);
+        AddStyle(T.S.StyleTerminalLed, IconStyle.TerminalLed);
+        miAutostart = new ToolStripMenuItem(T.S.MenuAutostart, null, delegate { ToggleAutostart(); });
         miAutostart.Checked = IsAutostart();
 
         menu.Items.Add(miStatus);
@@ -87,7 +95,7 @@ class TrayContext : ApplicationContext
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(miStyle);
         menu.Items.Add(miAutostart);
-        menu.Items.Add(new ToolStripMenuItem("Esci (WSL resta com'e')", null, delegate { Exit(); }));
+        menu.Items.Add(new ToolStripMenuItem(T.S.MenuExit, null, delegate { Exit(); }));
 
         tray.ContextMenuStrip = menu;
         tray.MouseClick += delegate (object s, MouseEventArgs e)
@@ -157,15 +165,16 @@ class TrayContext : ApplicationContext
         switch (s)
         {
             case WslState.On:
-                text = "WSL acceso";
+                text = T.S.StatusOn;
                 string d = (distros ?? "").Replace("\r", "").Trim().Replace("\n", ", ");
                 if (d.Length > 0) text += " - " + d;
                 break;
-            case WslState.Standby: text = "WSL in spegnimento (VM ancora in memoria)"; break;
-            case WslState.Busy: text = "WSL: operazione in corso..."; break;
-            default: text = "WSL spento"; break;
+            case WslState.Standby: text = T.S.StatusStandby; break;
+            case WslState.Busy: text = T.S.StatusBusy; break;
+            default: text = T.S.StatusOff; break;
         }
-        if (ramMb.HasValue && s != WslState.Off) text += string.Format(" - RAM {0:0.0} GB", ramMb.Value / 1024.0);
+        if (ramMb.HasValue && s != WslState.Off)
+            text += " - RAM " + (ramMb.Value / 1024.0).ToString("0.0", CultureInfo.CurrentCulture) + " GB";
 
         miStatus.Text = text;
         tray.Text = text.Length > 63 ? text.Substring(0, 63) : text;
@@ -203,8 +212,7 @@ class TrayContext : ApplicationContext
     void TurnOn()
     {
         if (busy) return;
-        if (!Confirm("Vuoi accendere WSL (Linux)?\n\nLa macchina virtuale usera' RAM finche' resta accesa.",
-                     "WSL - Accensione")) return;
+        if (!Confirm(T.S.ConfirmOnText, T.S.ConfirmOnTitle)) return;
         busy = true;
         Apply(WslState.Busy, null, null);
         try
@@ -218,7 +226,7 @@ class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
-            Notify("Impossibile accendere WSL: " + ex.Message, ToolTipIcon.Error);
+            Notify(T.S.ErrStart + " " + ex.Message, ToolTipIcon.Error);
         }
         FinishAfter(2500);
     }
@@ -226,9 +234,7 @@ class TrayContext : ApplicationContext
     void TurnOff()
     {
         if (busy) return;
-        if (!Confirm("Vuoi spegnere WSL?\n\nTutti i programmi e i terminali Linux aperti verranno chiusi " +
-                     "e il lavoro non salvato al loro interno andra' perso.",
-                     "WSL - Spegnimento")) return;
+        if (!Confirm(T.S.ConfirmOffText, T.S.ConfirmOffTitle)) return;
         busy = true;
         Apply(WslState.Busy, null, null);
         ThreadPool.QueueUserWorkItem(delegate
@@ -257,7 +263,7 @@ class TrayContext : ApplicationContext
             catch { Process.Start(new ProcessStartInfo("wsl.exe", "~") { UseShellExecute = true }); }
             FinishAfter(2000);
         }
-        catch (Exception ex) { Notify("Impossibile aprire il terminale: " + ex.Message, ToolTipIcon.Error); }
+        catch (Exception ex) { Notify(T.S.ErrTerminal + " " + ex.Message, ToolTipIcon.Error); }
     }
 
     void Exit()
@@ -564,16 +570,16 @@ static class IconPainter
                            System.Drawing.Imaging.ImageFormat.Png);
 
         // Foglio: per ogni stile -> 3 stati a 16 px reali, poi gli stessi ingranditi 4x (come li vedi da vicino)
-        int cell = 80, pad = 12, label = 190;
+        int cell = 80, pad = 12, label = 240;
         var sheet = new Bitmap(label + 3 * (16 + pad) + 3 * (64 + pad) + pad, styles.Length * cell + 40);
         using (var g = Graphics.FromImage(sheet))
         using (var font = new Font("Segoe UI", 11f))
         using (var small = new Font("Segoe UI", 9f))
         {
             g.Clear(Color.FromArgb(32, 32, 36));   // simile alla barra delle applicazioni scura
-            g.DrawString("16 px reali", small, Brushes.Silver, label, 8);
-            g.DrawString("ingrandite 4x", small, Brushes.Silver, label + 3 * (16 + pad) + 10, 8);
-            string[] labels = { "1. Terminale >_", "2. Pinguino (Tux)", "3. Pulsante accensione", "4. Terminale + LED" };
+            g.DrawString(T.S.PreviewActual, small, Brushes.Silver, label, 8);
+            g.DrawString(T.S.PreviewZoom, small, Brushes.Silver, label + 3 * (16 + pad) + 10, 8);
+            string[] labels = { "1. " + T.S.StyleTerminal, "2. " + T.S.StylePenguin, "3. " + T.S.StylePower, "4. " + T.S.StyleTerminalLed };
             for (int r = 0; r < styles.Length; r++)
             {
                 int y = 40 + r * cell;
@@ -590,7 +596,7 @@ static class IconPainter
                 }
             }
         }
-        sheet.Save(System.IO.Path.Combine(dir, "confronto-stili.png"), System.Drawing.Imaging.ImageFormat.Png);
+        sheet.Save(System.IO.Path.Combine(dir, "icon-styles.png"), System.Drawing.Imaging.ImageFormat.Png);
         sheet.Dispose();
     }
 }
