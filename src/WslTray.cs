@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Runtime.InteropServices;
@@ -21,7 +22,7 @@ static class Program
     [STAThread]
     static void Main(string[] args)
     {
-        // WslTray.exe --render <cartella> : salva le icone in PNG (anteprima / documentazione)
+        // WslTray.exe --render <folder> : saves the icons as PNG (previews / documentation)
         // WslTray.exe --lang <it|en|es|fr|de|pt> : forces a language (otherwise: Windows UI language)
         string lang = null;
         for (int i = 0; i + 1 < args.Length; i++)
@@ -31,6 +32,12 @@ static class Program
         if (args.Length >= 2 && args[0] == "--render")
         {
             IconPainter.RenderPreviews(args[1]);
+            return;
+        }
+        // WslTray.exe --ico <file.ico> : writes the application icon (used by build.ps1)
+        if (args.Length >= 2 && args[0] == "--ico")
+        {
+            IconPainter.WriteAppIcon(args[1]);
             return;
         }
         bool created;
@@ -57,19 +64,19 @@ class TrayContext : ApplicationContext
 
     readonly NotifyIcon tray = new NotifyIcon();
     readonly System.Windows.Forms.Timer timer = new System.Windows.Forms.Timer();
-    readonly Control ui = new Control();   // ponte verso il thread dell'interfaccia (handle creato subito)
+    readonly Control ui = new Control();   // bridge to the UI thread (handle created up front)
     readonly ToolStripMenuItem miStatus, miOn, miOff, miTerminal, miAutostart, miStyle;
-    Process keepAlive;             // processo "sleep infinity" che tiene viva la distro
+    Process keepAlive;             // "sleep infinity" process that keeps the distro alive
     WslState state = WslState.Off;
     IconStyle style;
-    bool busy;                     // operazione di accensione/spegnimento in corso
-    bool asking;                   // finestra di conferma aperta
+    bool busy;                     // a start/stop operation is in progress
+    bool asking;                   // a confirmation dialog is open
     bool polling;
     IntPtr currentIcon = IntPtr.Zero;
 
     public TrayContext()
     {
-        // Forza la creazione dell'handle: senza, BeginInvoke dai thread di lavoro fallisce
+        // Force handle creation: without it, BeginInvoke from worker threads fails
         IntPtr unused = ui.Handle;
 
         style = LoadStyle();
@@ -117,7 +124,7 @@ class TrayContext : ApplicationContext
         try { ui.BeginInvoke(action); } catch { }
     }
 
-    // ---------- stato ----------
+    // ---------- state ----------
 
     void Poll()
     {
@@ -183,7 +190,7 @@ class TrayContext : ApplicationContext
         SetIcon(s);
     }
 
-    // ---------- azioni ----------
+    // ---------- actions ----------
 
     bool Confirm(string question, string title)
     {
@@ -191,8 +198,8 @@ class TrayContext : ApplicationContext
         asking = true;
         try
         {
-            // finestra invisibile "sempre in primo piano" come proprietaria,
-            // cosi' la conferma non resta nascosta dietro altre finestre
+            // invisible "always on top" owner window,
+            // so the confirmation never ends up hidden behind other windows
             using (var owner = new Form())
             {
                 owner.TopMost = true;
@@ -217,7 +224,7 @@ class TrayContext : ApplicationContext
         Apply(WslState.Busy, null, null);
         try
         {
-            // Un processo che dorme per sempre tiene accesa la distro predefinita
+            // A process that sleeps forever keeps the default distro running
             var psi = new ProcessStartInfo("wsl.exe", "--exec sleep infinity");
             psi.UseShellExecute = false;
             psi.CreateNoWindow = true;
@@ -258,7 +265,7 @@ class TrayContext : ApplicationContext
     {
         try
         {
-            // Windows Terminal se presente, altrimenti la console classica
+            // Windows Terminal if available, otherwise the classic console
             try { Process.Start(new ProcessStartInfo("wt.exe", "wsl.exe ~") { UseShellExecute = true }); }
             catch { Process.Start(new ProcessStartInfo("wsl.exe", "~") { UseShellExecute = true }); }
             FinishAfter(2000);
@@ -272,7 +279,7 @@ class TrayContext : ApplicationContext
         tray.Visible = false;
         tray.Dispose();
         if (currentIcon != IntPtr.Zero) DestroyIcon(currentIcon);
-        // keepAlive non viene chiuso: uscire dal programma non spegne WSL
+        // keepAlive is left running: exiting the app does not stop WSL
         ExitThread();
     }
 
@@ -281,7 +288,7 @@ class TrayContext : ApplicationContext
         tray.ShowBalloonTip(4000, "WSL", msg, icon);
     }
 
-    // ---------- impostazioni ----------
+    // ---------- settings ----------
 
     static bool IsAutostart()
     {
@@ -333,7 +340,7 @@ class TrayContext : ApplicationContext
         miStyle.DropDownItems.Add(item);
     }
 
-    // ---------- icona ----------
+    // ---------- icon ----------
 
     void SetIcon(WslState s)
     {
@@ -347,7 +354,7 @@ class TrayContext : ApplicationContext
         }
     }
 
-    // ---------- utilita' ----------
+    // ---------- helpers ----------
 
     static string RunWsl(string args, int timeoutMs)
     {
@@ -358,7 +365,7 @@ class TrayContext : ApplicationContext
             psi.CreateNoWindow = true;
             psi.RedirectStandardOutput = true;
             psi.RedirectStandardError = true;
-            psi.EnvironmentVariables["WSL_UTF8"] = "1";   // output in UTF-8 invece di UTF-16
+            psi.EnvironmentVariables["WSL_UTF8"] = "1";   // UTF-8 output instead of UTF-16
             psi.StandardOutputEncoding = System.Text.Encoding.UTF8;
             using (var p = Process.Start(psi))
             {
@@ -372,7 +379,7 @@ class TrayContext : ApplicationContext
     }
 }
 
-// ================= disegno delle icone =================
+// ================= icon drawing =================
 static class IconPainter
 {
     public static readonly Color Red = Color.FromArgb(220, 38, 38);
@@ -410,7 +417,7 @@ static class IconPainter
         return bmp;
     }
 
-    // Piastrella lucida a tutta grandezza nel colore di stato
+    // Full-size glossy tile in the state color
     static void GlossyTile(Graphics g, float s, Color c, out GraphicsPath tile)
     {
         var r = new RectangleF(0, 0, s - 1, s - 1);
@@ -421,7 +428,7 @@ static class IconPainter
             g.DrawPath(pen, tile);
     }
 
-    // Stile 1: piastrella colorata con prompt ">_"
+    // Style 1: colored tile with a ">_" prompt
     static void DrawTerminal(Graphics g, float s, Color c)
     {
         GraphicsPath tile;
@@ -447,7 +454,7 @@ static class IconPainter
         }
     }
 
-    // Stile 2: Tux semplificato su piastrella colorata
+    // Style 2: simplified Tux on a colored tile
     static void DrawPenguin(Graphics g, float s, Color c)
     {
         GraphicsPath tile;
@@ -458,13 +465,13 @@ static class IconPainter
         using (var white = new SolidBrush(Color.White))
         using (var orange = new SolidBrush(Color.FromArgb(255, 176, 0)))
         {
-            g.FillEllipse(black, s * 0.17f, s * 0.10f, s * 0.66f, s * 1.10f);   // corpo
-            g.FillEllipse(white, s * 0.29f, s * 0.42f, s * 0.42f, s * 0.70f);   // pancia
-            g.FillEllipse(white, s * 0.31f, s * 0.22f, s * 0.16f, s * 0.20f);   // occhi
+            g.FillEllipse(black, s * 0.17f, s * 0.10f, s * 0.66f, s * 1.10f);   // body
+            g.FillEllipse(white, s * 0.29f, s * 0.42f, s * 0.42f, s * 0.70f);   // belly
+            g.FillEllipse(white, s * 0.31f, s * 0.22f, s * 0.16f, s * 0.20f);   // eyes
             g.FillEllipse(white, s * 0.53f, s * 0.22f, s * 0.16f, s * 0.20f);
-            g.FillEllipse(black, s * 0.37f, s * 0.29f, s * 0.08f, s * 0.10f);   // pupille
+            g.FillEllipse(black, s * 0.37f, s * 0.29f, s * 0.08f, s * 0.10f);   // pupils
             g.FillEllipse(black, s * 0.56f, s * 0.29f, s * 0.08f, s * 0.10f);
-            g.FillEllipse(orange, s * 0.36f, s * 0.40f, s * 0.28f, s * 0.13f);  // becco
+            g.FillEllipse(orange, s * 0.36f, s * 0.40f, s * 0.28f, s * 0.13f);  // beak
         }
         g.Clip = oldClip;
         using (var pen = new Pen(Darken(c, 0.45f), Math.Max(1f, s / 24f)))
@@ -472,7 +479,7 @@ static class IconPainter
         tile.Dispose();
     }
 
-    // Stile 3: pulsante luminoso con simbolo di accensione, a tutta grandezza
+    // Style 3: full-size glowing button with the power symbol
     static void DrawPower(Graphics g, float s, Color c)
     {
         var body = new RectangleF(0.5f, 0.5f, s - 2f, s - 2f);
@@ -502,7 +509,7 @@ static class IconPainter
         }
     }
 
-    // Stile 4: finestra di terminale scura con ">_" e LED di stato in basso a destra
+    // Style 4: dark terminal window with ">_" and a status LED bottom-right
     static void DrawTerminalLed(Graphics g, float s, Color c)
     {
         var r = new RectangleF(0, 0, s - 1, s - 1);
@@ -555,7 +562,39 @@ static class IconPainter
         return Color.FromArgb(c.A, (int)(c.R * (1 - k)), (int)(c.G * (1 - k)), (int)(c.B * (1 - k)));
     }
 
-    // Anteprime: singoli PNG + un foglio di confronto con le icone a 16 px ingrandite
+    // Multi-size .ico (PNG-compressed entries, supported since Windows Vista):
+    // green "Terminal >_" style, the "WSL on" look
+    public static void WriteAppIcon(string path)
+    {
+        int[] sizes = { 16, 24, 32, 48, 64, 256 };
+        var images = new List<byte[]>();
+        foreach (int sz in sizes)
+            using (var b = Draw(IconStyle.Terminal, sz, Green))
+            using (var ms = new System.IO.MemoryStream())
+            {
+                b.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+                images.Add(ms.ToArray());
+            }
+
+        using (var fs = System.IO.File.Create(path))
+        using (var w = new System.IO.BinaryWriter(fs))
+        {
+            w.Write((ushort)0); w.Write((ushort)1); w.Write((ushort)sizes.Length);   // ICONDIR
+            int offset = 6 + 16 * sizes.Length;
+            for (int i = 0; i < sizes.Length; i++)                                     // ICONDIRENTRY
+            {
+                w.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));
+                w.Write((byte)(sizes[i] >= 256 ? 0 : sizes[i]));
+                w.Write((byte)0); w.Write((byte)0);
+                w.Write((ushort)1); w.Write((ushort)32);
+                w.Write((uint)images[i].Length); w.Write((uint)offset);
+                offset += images[i].Length;
+            }
+            foreach (var img in images) w.Write(img);
+        }
+    }
+
+    // Previews: individual PNGs + a comparison sheet with the 16 px icons zoomed in
     public static void RenderPreviews(string dir)
     {
         System.IO.Directory.CreateDirectory(dir);
@@ -569,14 +608,14 @@ static class IconPainter
                     b.Save(System.IO.Path.Combine(dir, st.ToString().ToLower() + "-" + names[i] + ".png"),
                            System.Drawing.Imaging.ImageFormat.Png);
 
-        // Foglio: per ogni stile -> 3 stati a 16 px reali, poi gli stessi ingranditi 4x (come li vedi da vicino)
+        // Sheet: for each style -> 3 states at actual 16 px, then the same zoomed 4x
         int cell = 80, pad = 12, label = 240;
         var sheet = new Bitmap(label + 3 * (16 + pad) + 3 * (64 + pad) + pad, styles.Length * cell + 40);
         using (var g = Graphics.FromImage(sheet))
         using (var font = new Font("Segoe UI", 11f))
         using (var small = new Font("Segoe UI", 9f))
         {
-            g.Clear(Color.FromArgb(32, 32, 36));   // simile alla barra delle applicazioni scura
+            g.Clear(Color.FromArgb(32, 32, 36));   // similar to a dark taskbar
             g.DrawString(T.S.PreviewActual, small, Brushes.Silver, label, 8);
             g.DrawString(T.S.PreviewZoom, small, Brushes.Silver, label + 3 * (16 + pad) + 10, 8);
             string[] labels = { "1. " + T.S.StyleTerminal, "2. " + T.S.StylePenguin, "3. " + T.S.StylePower, "4. " + T.S.StyleTerminalLed };
