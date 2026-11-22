@@ -4,7 +4,11 @@ Un pulsante luminoso nell'area di notifica di Windows per vedere a colpo d'occhi
 
 | Spento | Acceso | In spegnimento |
 |:---:|:---:|:---:|
-| ![spento](docs/off-128.png) | ![acceso](docs/on-128.png) | ![standby](docs/standby-128.png) |
+| <img src="docs/terminal-off.png" width="64"> | <img src="docs/terminal-on.png" width="64"> | <img src="docs/terminal-standby.png" width="64"> |
+
+Lo stile dell'icona si sceglie da tasto destro → **Stile icona**, e la scelta viene ricordata. Gli stili sono quattro: terminale `>_` (predefinito), pinguino Tux, pulsante di accensione e terminale scuro con LED.
+
+![confronto stili](docs/confronto-stili.png)
 
 - **Rosso**: WSL è spento e non usa RAM.
 - **Verde**: una distribuzione Linux è in esecuzione. Il tooltip mostra quale e quanta RAM usa la VM.
@@ -13,7 +17,7 @@ Un pulsante luminoso nell'area di notifica di Windows per vedere a colpo d'occhi
 ## Uso
 
 - **Clic sinistro**: accende o spegne WSL. Chiede **sempre conferma** prima di farlo.
-- **Clic destro**: menu con stato, Accendi, Spegni, Apri terminale Linux, Avvia con Windows ed Esci.
+- **Clic destro**: menu con stato, Accendi, Spegni, Apri terminale Linux, Stile icona, Avvia con Windows ed Esci.
 - **Esci** chiude solo l'icona e lascia WSL nello stato in cui si trova.
 
 Per l'accensione, WSL Tray avvia nella distribuzione predefinita un processo `sleep infinity` nascosto, così la distro resta accesa. Per lo spegnimento esegue `wsl --shutdown`, che chiude tutte le distribuzioni e la VM e restituisce la RAM a Windows.
